@@ -3,35 +3,27 @@ from telethon.tl.types import InputChannel
 import yaml
 import discord
 import asyncio
+import os
+import logging
 
-message = []
+logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
+                    level=logging.INFO)
 
-with open('config.yml', 'rb') as f:
+messages = None
+
+with open(os.environ['CONFIG_FILE'], 'rb') as f:
     config = yaml.safe_load(f)
 
-
+channel_mapping = {}
 
 """
 TELEGRAM CLIENT STUFF
 """
-client = TelegramClient("forwardgram", config["api_id"], config["api_hash"])
-client.start()
-
-#Find input telegram channels
-input_channels_entities = []
-
-for d in client.iter_dialogs():
-    if d.name in config["input_channel_names"]: #or d.entity.id in config["input_channel_id"]:
-        input_channels_entities.append( InputChannel(d.entity.id, d.entity.access_hash) )
-
-if input_channels_entities == []:
-    print("No input channels found, exiting")
-    exit()
-
+client = TelegramClient(os.environ['SESSION_NAME'], config["api_id"], config["api_hash"])
 
 #TELEGRAM NEW MESSAGE
-@client.on(events.NewMessage(chats=input_channels_entities))
-async def handler(event):
+async def read_messages(event):
+    global messages
     # If the message contains a URL, parse and send Message + URL
     try:
         parsed_response = (event.message.message + '\n' + event.message.entities[0].url )
@@ -40,33 +32,61 @@ async def handler(event):
     except:
         parsed_response = event.message.message
 
-    globals()['message'].append(parsed_response)
+
+    messages.put_nowait((event.chat.id, parsed_response))
 
 
 
 """
 DISCORD CLIENT STUFF
 """
-discord_client = discord.Client()
+intents = discord.Intents.none()
+intents.guilds = True
+discord_client = discord.Client(intents=intents)
 
-async def background_task():
-    global message
+async def send_messages():
+    global messages
     await discord_client.wait_until_ready()
-    discord_channel = discord_client.get_channel(config["discord_channel"])
     while True:
-        if message != []:
-            await discord_channel.send(message[0])
-            message.pop(0)
-        await asyncio.sleep(0.1)
+        telegram_channel, message = await messages.get()
+        discord_channel = discord_client.get_channel(channel_mapping[telegram_channel])
+        await discord_channel.send(message)
 
-discord_client.loop.create_task(background_task())
+async def main():
+    global messages 
+    global channel_mapping
 
+    messages = asyncio.Queue()
+    await client.start()
+    input_channels_entities = []
+    channel_names_to_discord = {}
+    for c in config["channels_configuration"]:
+        channel_names_to_discord[c["input"]] = c["output"]
+    async for d in client.iter_dialogs():
+        if d.name in channel_names_to_discord: #or d.entity.id in config["input_channel_id"]:
+            logging.info("Listening in " + d.name)
+            channel_mapping[d.entity.id] = channel_names_to_discord[d.name]
+            del channel_names_to_discord[d.name]
+            input_channels_entities.append( InputChannel(d.entity.id, d.entity.access_hash) )
+            if not channel_names_to_discord:
+                break
+
+    if not input_channels_entities:
+        logging.error("No input channels found, exiting")
+        exit()
+
+    client.add_event_handler(read_messages, events.NewMessage(chats=input_channels_entities, incoming=True))
+    client.add_event_handler(read_messages, events.NewMessage(chats=input_channels_entities, outgoing=True))
+
+    await asyncio.gather(
+        client.disconnected,
+        asyncio.create_task(discord_client.start(config["discord_bot_token"])),
+        asyncio.create_task(send_messages()),
+    )
 
 
 """
 RUN EVERYTHING ASYNCHRONOUSLY
 """
 
-print("Listening now")
-asyncio.run( discord_client.run(config["discord_bot_token"]) )
-asyncio.run( client.run_until_disconnected() )
+client.loop.run_until_complete(main())

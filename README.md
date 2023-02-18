@@ -29,9 +29,9 @@ Forwardgram is a free and open source, telegram to discord message bot. It enabl
 
 ### Installing and Setup
 1. Clone this repository
-2. Open your choice of console (or Anaconda console) and navigate to cloned folder 
+2. Open your choice of console (or Anaconda console) and navigate to cloned folder
 3. Run Command: `python3 -m pip install -r requirements.txt`.
-4. Fill out a configuration file. An exmaple file can be found at `config.yml`. 
+4. Fill out a configuration file. An exmaple file can be found at `config.sample.yml`. Make sure it's named `config.yml` 
 
 
 #### Filling `config.yml` file
@@ -40,9 +40,7 @@ Forwardgram is a free and open source, telegram to discord message bot. It enabl
 
 * Add your `discord_bot_token` to config.yml | Read more [here](https://www.writebots.com/discord-bot-token/)
 
-* Add the Discord channel ID you would like to log to at `discord_channel`.
-
-* Locate the Telegram channels you would like to log and set their names at `input_channel_names`
+* Configure the `telegram` to `discord` channels in the `channels_configuration` property.
 
 ### Running
 * Run the command `python3 forwardgram.py`
@@ -56,6 +54,7 @@ Forwardgram is a free and open source, telegram to discord message bot. It enabl
 * Karan Kapuria
 * voidbar
 * Brent Stanfield (discord bot delay fix & rewrite)
+* Miguel Jimenez (multiple channels configuration & setting up a docker file)
 
 <a href="https://www.buymeacoffee.com/kapuriakaran" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
