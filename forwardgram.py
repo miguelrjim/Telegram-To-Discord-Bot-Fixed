@@ -43,6 +43,7 @@ DISCORD CLIENT STUFF
 intents = discord.Intents.none()
 intents.guilds = True
 discord_client = discord.Client(intents=intents)
+DISCORD_MAX_MESSAGE_LENGTH = 1800
 
 async def send_messages():
     global messages
@@ -50,7 +51,9 @@ async def send_messages():
     while True:
         telegram_channel, message = await messages.get()
         discord_channel = discord_client.get_channel(channel_mapping[telegram_channel])
-        await discord_channel.send(message)
+        batches = [message[i:i+DISCORD_MAX_MESSAGE_LENGTH] for i in range(0, len(message), DISCORD_MAX_MESSAGE_LENGTH)]
+        for batch in batches:
+            await discord_channel.send(batch)
 
 async def main():
     global messages 
@@ -75,8 +78,7 @@ async def main():
         logging.error("No input channels found, exiting")
         exit()
 
-    client.add_event_handler(read_messages, events.NewMessage(chats=input_channels_entities, incoming=True))
-    client.add_event_handler(read_messages, events.NewMessage(chats=input_channels_entities, outgoing=True))
+    client.add_event_handler(read_messages, events.NewMessage(chats=input_channels_entities))
 
     await asyncio.gather(
         client.disconnected,
