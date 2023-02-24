@@ -1,2 +1,6 @@
 config*.yml
 *.session*
+__pycache__
+.vscode
+venv
+get-session.py
