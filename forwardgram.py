@@ -5,6 +5,7 @@ import discord
 import asyncio
 import os
 import logging
+import io
 
 logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
                     level=logging.INFO)
@@ -24,16 +25,8 @@ client = TelegramClient(os.environ['SESSION_NAME'], config["api_id"], config["ap
 #TELEGRAM NEW MESSAGE
 async def read_messages(event):
     global messages
-    # If the message contains a URL, parse and send Message + URL
-    try:
-        parsed_response = (event.message.message + '\n' + event.message.entities[0].url )
-        parsed_response = ''.join(parsed_response)
-    # Or we only send Message    
-    except:
-        parsed_response = event.message.message
 
-
-    messages.put_nowait((event.chat.id, parsed_response))
+    messages.put_nowait((event.chat.id, event.message))
 
 
 
@@ -50,10 +43,28 @@ async def send_messages():
     await discord_client.wait_until_ready()
     while True:
         telegram_channel, message = await messages.get()
+        # If the message contains a URL, parse and send Message + URL
+        try:
+            parsed_response = (message.message + '\n' + message.entities[0].url )
+            parsed_response = ''.join(parsed_response)
+        # Or we only send Message    
+        except:
+            parsed_response = message.message
         discord_channel = discord_client.get_channel(channel_mapping[telegram_channel])
-        batches = [message[i:i+DISCORD_MAX_MESSAGE_LENGTH] for i in range(0, len(message), DISCORD_MAX_MESSAGE_LENGTH)]
-        for batch in batches:
+        batches = [parsed_response[i:i+DISCORD_MAX_MESSAGE_LENGTH] for i in range(0, len(parsed_response), DISCORD_MAX_MESSAGE_LENGTH)]
+        for batch in batches[:-1]:
             await discord_channel.send(batch)
+        file = None
+        embed = None
+        if message.file:
+            file = await message.download_media(file=bytes)
+            filename = f"file{message.file.ext}"
+            file = discord.File(io.BytesIO(file), filename)
+            embed = discord.Embed()
+            embed.set_image(url=f"attachment://{filename}")
+        last_batch = '' if not batches else batches[-1]
+        await discord_channel.send(last_batch, file=file, embed=embed)
+        
 
 async def main():
     global messages 
