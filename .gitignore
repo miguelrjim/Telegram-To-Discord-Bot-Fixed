@@ -7,4 +7,4 @@ config*.yml
 !config.sample.yml
 *.session
 *.session-journal
-get-session.py
+temp/

@@ -43,17 +43,25 @@ async def send_messages():
     await discord_client.wait_until_ready()
     while True:
         telegram_channel, message = await messages.get()
-        # If the message contains a URL, parse and send Message + URL
-        try:
-            parsed_response = (message.message + '\n' + message.entities[0].url )
-            parsed_response = ''.join(parsed_response)
-        # Or we only send Message    
-        except:
-            parsed_response = message.message
+
         discord_channel = discord_client.get_channel(channel_mapping[telegram_channel])
-        batches = [parsed_response[i:i+DISCORD_MAX_MESSAGE_LENGTH] for i in range(0, len(parsed_response), DISCORD_MAX_MESSAGE_LENGTH)]
-        for batch in batches[:-1]:
-            await discord_channel.send(batch)
+        if message.message:
+            try:
+                # If the message contains a URL, parse and send Message + URL
+                parsed_response = (message.message + '\n' + message.entities[0].url )
+                parsed_response = ''.join(parsed_response)  
+            except:
+                # Or we only send Message  
+                parsed_response = message.message
+            batches = [parsed_response[i:i+DISCORD_MAX_MESSAGE_LENGTH] for i in range(0, len(parsed_response), DISCORD_MAX_MESSAGE_LENGTH)]
+            # We send all the batches except for the last one
+            for batch in batches[:-1]:
+                await discord_channel.send(batch)
+        else:
+            batches = None
+
+        # If there's an image attached to the telegram message
+        # we download it and add it to the last batch for discord
         file = None
         embed = None
         if message.file:
@@ -63,8 +71,9 @@ async def send_messages():
             embed = discord.Embed()
             embed.set_image(url=f"attachment://{filename}")
         last_batch = '' if not batches else batches[-1]
-        await discord_channel.send(last_batch, file=file, embed=embed)
-        
+        if last_batch or file:
+            await discord_channel.send(last_batch, file=file, embed=embed)
+                    
 
 async def main():
     global messages 
@@ -77,7 +86,7 @@ async def main():
     for c in config["channels_configuration"]:
         channel_names_to_discord[c["input"]] = c["output"]
     async for d in client.iter_dialogs():
-        if d.name in channel_names_to_discord: #or d.entity.id in config["input_channel_id"]:
+        if d.name in channel_names_to_discord:
             logging.info("Listening in " + d.name)
             channel_mapping[d.entity.id] = channel_names_to_discord[d.name]
             del channel_names_to_discord[d.name]
