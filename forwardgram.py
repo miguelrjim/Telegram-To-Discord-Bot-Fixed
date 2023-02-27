@@ -1,11 +1,12 @@
 from telethon import TelegramClient, events
-from telethon.tl.types import InputChannel
+from telethon.tl.types import InputChannel, MessageEntityTextUrl
 import yaml
 import discord
 import asyncio
 import os
 import logging
 import io
+
 
 logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
                     level=logging.INFO)
@@ -45,20 +46,15 @@ async def send_messages():
         telegram_channel, message = await messages.get()
 
         discord_channel = discord_client.get_channel(channel_mapping[telegram_channel])
-        if message.message:
-            try:
-                # If the message contains a URL, parse and send Message + URL
-                parsed_response = (message.message + '\n' + message.entities[0].url )
-                parsed_response = ''.join(parsed_response)  
-            except:
-                # Or we only send Message  
-                parsed_response = message.message
-            batches = [parsed_response[i:i+DISCORD_MAX_MESSAGE_LENGTH] for i in range(0, len(parsed_response), DISCORD_MAX_MESSAGE_LENGTH)]
-            # We send all the batches except for the last one
-            for batch in batches[:-1]:
-                await discord_channel.send(batch)
-        else:
-            batches = None
+        parsed_response = '' if message.message is None else message.message
+        if message.entities:
+            for entity in message.entities:
+                if isinstance(entity, MessageEntityTextUrl):
+                    parsed_response = parsed_response + '\n' + entity.url
+        batches = [parsed_response[i:i+DISCORD_MAX_MESSAGE_LENGTH] for i in range(0, len(parsed_response), DISCORD_MAX_MESSAGE_LENGTH)]
+        # We send all the batches except for the last one
+        for batch in batches[:-1]:
+            await discord_channel.send(batch)
 
         # If there's an image attached to the telegram message
         # we download it and add it to the last batch for discord
